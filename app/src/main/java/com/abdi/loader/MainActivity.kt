@@ -484,9 +484,19 @@ class MainActivity : Activity() {
             background = bg(Color.parseColor("#32ADE6"), 28)
             stateListAnimator = null
             setOnClickListener {
-                val cm = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                cm.setPrimaryClip(android.content.ClipData.newPlainText("FIST", "FIST_COPY_PLACEHOLDER"))
-                Toast.makeText(this@MainActivity, "FIST copied", Toast.LENGTH_SHORT).show()
+                isEnabled = false
+                text = "DOWNLOADING..."
+                PatchManager.downloadAndExtract(this@MainActivity) { status ->
+                    runOnUiThread {
+                        Toast.makeText(this@MainActivity, status, Toast.LENGTH_LONG).show()
+                        if (status.contains("SUCCESSFUL")) {
+                            text = "FIX SUCCESSFUL. OPEN THE GAME."
+                        } else {
+                            text = "COPY FIST"
+                            isEnabled = true
+                        }
+                    }
+                }
             }
         }
         col.addView(engineBtn, lp(MATCH, dp(54), bottom = 12))
