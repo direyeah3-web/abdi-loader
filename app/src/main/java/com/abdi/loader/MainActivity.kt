@@ -511,8 +511,7 @@ class MainActivity : Activity() {
             stateListAnimator = null
             setOnClickListener {
                 if (Settings.canDrawOverlays(this@MainActivity)) {
-                    startService(Intent(this@MainActivity, FloatingMenuService::class.java))
-                    Toast.makeText(this@MainActivity, "Engine Started", Toast.LENGTH_SHORT).show()
+                    showModMenu()
                 } else {
                     startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
                 }
@@ -671,6 +670,72 @@ class MainActivity : Activity() {
 
 
     
+    
+    private fun showModMenu() {
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(Color.parseColor("#050505"))
+            setPadding(dp(22), dp(48), dp(22), dp(24))
+        }
+        
+        root.addView(TextView(this).apply {
+            text = "ESP & Mod Menu"
+            textSize = 28f
+            setTextColor(Color.WHITE)
+            typeface = Typeface.DEFAULT_BOLD
+            setPadding(0, 0, 0, dp(24))
+        })
+
+        val features = listOf(
+            "line_esp" to "Line ESP",
+            "radar_map" to "Radar Map",
+            "vehicle" to "Show Vehicles",
+            "warning_360" to "360 Warning",
+            "aiming_at_me_warning" to "Aim Warning"
+        )
+
+        for ((key, title) in features) {
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                background = bg(CARD, 12)
+                setPadding(dp(16), dp(14), dp(16), dp(14))
+            }
+            row.addView(TextView(this).apply {
+                text = title
+                textSize = 16f
+                setTextColor(Color.WHITE)
+            }, LinearLayout.LayoutParams(0, WRAP, 1f))
+            
+            row.addView(android.widget.Switch(this).apply {
+                isChecked = true // Default state
+                setOnCheckedChangeListener { _, isChecked ->
+                    ModMenuManager.toggleFeature(this@MainActivity, key, isChecked) { status ->
+                        runOnUiThread {
+                            Toast.makeText(this@MainActivity, "$title: $status", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                }
+            })
+            root.addView(row, lp(MATCH, WRAP, bottom = 8))
+        }
+
+        val back = Button(this).apply {
+            text = "Back"
+            setAllCaps(false)
+            background = bg(Color.parseColor("#2C2C2E"), 12)
+            setTextColor(Color.WHITE)
+            setOnClickListener { verify(curKey) }
+        }
+        root.addView(back, lp(MATCH, dp(50), top = 24))
+
+        val sv = ScrollView(this).apply {
+            isFillViewport = true
+            addView(root)
+        }
+        show(sv)
+    }
+
     private fun showSettings() {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
