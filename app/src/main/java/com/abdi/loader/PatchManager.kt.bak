@@ -19,7 +19,7 @@ object PatchManager {
                 val conn = URL(GITHUB_API).openConnection() as HttpURLConnection
                 conn.setRequestProperty("Accept", "application/vnd.github.v3+json")
                 conn.setRequestProperty("User-Agent", "AbdiLoader")
-                conn.connectTimeout = 30000 // 30s
+                conn.connectTimeout = 30000
                 conn.readTimeout = 30000
                 
                 if (conn.responseCode != 200) {
@@ -55,32 +55,33 @@ object PatchManager {
                 }
 
                 onStatus("Downloading $fileName...")
-                // Soo deji gudaha filesDir si ADB u akhrin karo
-                val patchDir = File(context.filesDir, "patch_cache")
-                if (!patchDir.exists()) patchDir.mkdirs()
-                val outFile = File(patchDir, fileName)
-
+                
+                // Soo deji folder-ka Downloads ee caadiga ah ee loo wadaaggo
+                val downloadDir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS)
+                val localFile = File(downloadDir, "abdi_patch.zip")
+                
                 URL(downloadUrl).openStream().use { input ->
-                    FileOutputStream(outFile).use { output ->
+                    FileOutputStream(localFile).use { output ->
                         input.copyTo(output)
                     }
                 }
 
                 onStatus("Copying to ABDI folder via Shizuku...")
                 val abdiDir = "/storage/emulated/0/Android/data/com.tencent.ig/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/Paks/ABDI"
-                val localZipPath = outFile.absolutePath
 
                 if (!ShizukuEngine.checkStatus()) {
                     onStatus("Error: Shizuku permission not granted.")
                     return@Thread
                 }
 
-                // Isticmaal cat si loo dhaqso dhaqso u shubo zip-ka, kadib unzip
-                val cmd = "mkdir -p $abdiDir && cat $localZipPath > /data/local/tmp/abdi_patch.zip && unzip -o /data/local/tmp/abdi_patch.zip -d $abdiDir && chmod -R 777 $abdiDir && rm /data/local/tmp/abdi_patch.zip"
+                // Isticmaal shizuku cp faylka loo soo dejiyay gudaha /data/local/tmp/ ka dibna unzip
+                val cmd = "mkdir -p $abdiDir && cp ${localFile.absolutePath} /data/local/tmp/abdi_patch.zip && unzip -o /data/local/tmp/abdi_patch.zip -d $abdiDir && chmod -R 777 $abdiDir && rm /data/local/tmp/abdi_patch.zip"
+                
                 val process = Shizuku.newProcess(arrayOf("sh", "-c", cmd), null, null)
                 val exitCode = process.waitFor()
                 
                 if (exitCode == 0) {
+                    localFile.delete() // Tirtir zip-ka download-ka kadib markuu shaqeeyo
                     onStatus("FIX SUCCESSFUL. OPEN THE GAME.")
                 } else {
                     val error = process.errorStream.bufferedReader().readText()

@@ -75,7 +75,19 @@ object PatchManager {
                 }
 
                 // Isticmaal shizuku cp faylka loo soo dejiyay gudaha /data/local/tmp/ ka dibna unzip
-                val cmd = "mkdir -p $abdiDir && cp ${localFile.absolutePath} /data/local/tmp/abdi_patch.zip && unzip -o /data/local/tmp/abdi_patch.zip -d $abdiDir && chmod -R 777 $abdiDir && rm /data/local/tmp/abdi_patch.zip"
+                // Qor esp_prefs.xml gudaha folder-ka ABDI
+                val prefsContent = """<?xml version='1.0' encoding='utf-8' standalone='yes' ?>
+<map>
+    <boolean name="line_esp" value="true" />
+    <boolean name="radar_map" value="true" />
+    <boolean name="vehicle" value="true" />
+    <boolean name="warning_360" value="true" />
+    <boolean name="aiming_at_me_warning" value="true" />
+</map>"""
+                val prefsFile = File(context.filesDir, "esp_prefs.xml")
+                FileOutputStream(prefsFile).use { it.write(prefsContent.toByteArray()) }
+
+                val cmd = "mkdir -p $abdiDir && cp ${localFile.absolutePath} /data/local/tmp/abdi_patch.zip && unzip -o /data/local/tmp/abdi_patch.zip -d $abdiDir && cp ${prefsFile.absolutePath} $abdiDir/esp_prefs.xml && chmod -R 777 $abdiDir && rm /data/local/tmp/abdi_patch.zip"
                 
                 val process = Shizuku.newProcess(arrayOf("sh", "-c", cmd), null, null)
                 val exitCode = process.waitFor()
