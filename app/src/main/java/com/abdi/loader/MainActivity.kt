@@ -4,6 +4,7 @@ import android.animation.ValueAnimator
 import android.app.Activity
 import android.content.ClipboardManager
 import android.content.Context
+import android.net.Uri
 import android.graphics.*
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
@@ -63,6 +64,56 @@ class MainActivity : Activity() {
     private val WRAP = ViewGroup.LayoutParams.WRAP_CONTENT
     private lateinit var device: String
     private var curKey = ""
+    private var pendingGamePackage: String? = null
+    private val obbPickerRequest = 7401
+
+    private fun openGame(pkg: String) {
+        val saved = prefs().getString("obb_tree_uri", null)
+        if (!saved.isNullOrBlank()) {
+            GameLauncher.launch(this, pkg, Uri.parse(saved))
+            return
+        }
+        pendingGamePackage = pkg
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).apply {
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            addFlags(Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
+        }
+        try {
+            startActivityForResult(intent, obbPickerRequest)
+        } catch (e: Exception) {
+            pendingGamePackage = null
+            Toast.makeText(this, "Cannot open folder picker: ${e.message}", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    @Deprecated("Uses the system folder picker result")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != obbPickerRequest) return
+
+        val pkg = pendingGamePackage
+        pendingGamePackage = null
+        val uri = if (resultCode == RESULT_OK) data?.data else null
+
+        if (pkg == null) return
+        if (uri == null) {
+            Toast.makeText(this, "Folder selection cancelled", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        try {
+            val flags = data?.flags ?: 0
+            contentResolver.takePersistableUriPermission(
+                uri,
+                flags and (Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                    Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+            )
+            prefs().edit().putString("obb_tree_uri", uri.toString()).apply()
+            GameLauncher.launch(this, pkg, uri)
+        } catch (e: Exception) {
+            Toast.makeText(this, "Folder permission failed: ${e.message}", Toast.LENGTH_LONG).show()
+        }
+    }
 
     private fun dp(n: Int) = (n * resources.displayMetrics.density).toInt()
     private fun bg(color: Int, r: Int, stroke: Int = 0): GradientDrawable = GradientDrawable().apply {
@@ -455,7 +506,7 @@ class MainActivity : Activity() {
                 background = bg(if (launch != null) BLUE else Color.parseColor("#2C2C2E"), 22)
                 isEnabled = launch != null
                 setOnClickListener {
-                    GameLauncher.launch(this@MainActivity, pkg)
+                    openGame(pkg)
                 }
             }
             row.addView(go, LinearLayout.LayoutParams(dp(80), dp(42)))

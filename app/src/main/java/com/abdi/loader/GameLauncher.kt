@@ -4,55 +4,26 @@ import android.app.Activity
 import android.app.ProgressDialog
 import android.content.Intent
 import android.net.Uri
-import android.os.Build
-import android.os.Environment
-import android.provider.Settings
 import android.util.Log
 import android.widget.Toast
+import androidx.documentfile.provider.DocumentFile
 import java.io.File
-import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.io.IOException
 import top.niunaijun.blackbox.BlackBoxCore
 import top.niunaijun.blackbox.core.env.BEnvironment
 
 object GameLauncher {
-    fun launch(activity: Activity, pkg: String, validate: () -> String? = { null }) {
+    fun launch(activity: Activity, pkg: String, treeUri: Uri, validate: () -> String? = { null }) {
         val error = validate()
         if (error != null) {
             Toast.makeText(activity, error, Toast.LENGTH_LONG).show()
             return
         }
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R &&
-            !Environment.isExternalStorageManager()) {
-            Toast.makeText(
-                activity,
-                "Allow All files access for Abdi Loader, then tap Open again.",
-                Toast.LENGTH_LONG
-            ).show()
-            try {
-                activity.startActivity(
-                    Intent(
-                        Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
-                        Uri.parse("package:${activity.packageName}")
-                    )
-                )
-            } catch (e: Exception) {
-                try {
-                    activity.startActivity(
-                        Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
-                    )
-                } catch (ignored: Exception) {
-                    Log.e("AbdiLoader", "Cannot open storage settings", e)
-                }
-            }
-            return
-        }
-
         val dialog = ProgressDialog(activity).apply {
             setTitle("Abdi Loader")
-            setMessage("Preparing PUBG...")
+            setMessage("Finding PUBG OBB files...")
             setProgressStyle(ProgressDialog.STYLE_HORIZONTAL)
             max = 100
             progress = 0
@@ -62,35 +33,98 @@ object GameLauncher {
 
         Thread {
             try {
-                val core = BlackBoxCore.get()
-                val userId = 0
+                val tree = DocumentFile.fromTreeUri(activity, treeUri)
+                    ?: throw IOException("Cannot access selected folder")
 
-                if (!core.isInstalled(pkg, userId)) {
-                    val result = core.installPackageAsUser(pkg, userId)
-                    if (!core.isInstalled(pkg, userId)) {
-                        throw IOException("Virtual installation failed: $result")
+                fun findPackageFolder(dir: DocumentFile): DocumentFile? {
+                    if (dir.name == pkg && dir.isDirectory) return dir
+                    for (child in dir.listFiles()) {
+                        if (child.isDirectory) {
+                            val found = findPackageFolder(child)
+                            if (found != null) return found
+                        }
+                    }
+                    return null
+                }
+
+                fun collectObb(dir: DocumentFile, out: MutableList<DocumentFile>) {
+                    for (child in dir.listFiles()) {
+                        if (child.isDirectory) collectObb(child, out)
+                        else if (child.isFile && child.name?.endsWith(".obb", true) == true) {
+                            out.add(child)
+                        }
                     }
                 }
 
-                val source = File(
-                    Environment.getExternalStorageDirectory(),
-                    "Android/obb/$pkg"
-                )
-                val destination = BEnvironment.getExternalObbDir(pkg, userId)
+                val packageFolder = if (tree.name == pkg) tree else findPackageFolder(tree)
+                val files = mutableListOf<DocumentFile>()
+                collectObb(packageFolder ?: tree, files)
 
-                copyObb(source, destination) { percent ->
-                    activity.runOnUiThread {
-                        if (dialog.isShowing) {
-                            dialog.progress = percent
-                            dialog.setMessage("Copying OBB... $percent%")
+                val destination = BEnvironment.getExternalObbDir(pkg, 0)
+                if (files.isEmpty()) {
+                    val existing = destination.exists() &&
+                        destination.walkTopDown().any { it.isFile && it.extension.equals("obb", true) }
+                    if (!existing) {
+                        throw IOException(
+                            "No .obb files found. Select the folder containing " +
+                            "Android/obb/$pkg, or select the $pkg folder itself."
+                        )
+                    }
+                } else {
+                    if (!destination.exists() && !destination.mkdirs()) {
+                        throw IOException("Cannot create virtual OBB folder")
+                    }
+
+                    val total = files.sumOf { it.length() }.coerceAtLeast(1L)
+                    var copied = 0L
+                    var lastPercent = -1
+
+                    for (doc in files) {
+                        val name = doc.name ?: continue
+                        val output = File(destination, name)
+                        val length = doc.length()
+
+                        if (output.exists() && output.length() == length && length > 0L) {
+                            copied += length
+                            continue
+                        }
+
+                        val input = activity.contentResolver.openInputStream(doc.uri)
+                            ?: throw IOException("Cannot read OBB file: $name")
+                        input.use { ins ->
+                            FileOutputStream(output).use { outs ->
+                                val buffer = ByteArray(256 * 1024)
+                                while (true) {
+                                    val n = ins.read(buffer)
+                                    if (n < 0) break
+                                    outs.write(buffer, 0, n)
+                                    copied += n
+                                    val percent = ((copied * 100L) / total).toInt().coerceIn(0, 100)
+                                    if (percent != lastPercent) {
+                                        lastPercent = percent
+                                        activity.runOnUiThread {
+                                            if (dialog.isShowing) {
+                                                dialog.progress = percent
+                                                dialog.setMessage("Copying OBB... $percent%")
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }
 
                 activity.runOnUiThread {
-                    if (dialog.isShowing) {
-                        dialog.progress = 100
-                        dialog.setMessage("OBB copied. Launching game...")
+                    if (dialog.isShowing) dialog.setMessage("Starting virtual game...")
+                }
+
+                val core = BlackBoxCore.get()
+                val userId = 0
+                if (!core.isInstalled(pkg, userId)) {
+                    val result = core.installPackageAsUser(pkg, userId)
+                    if (!core.isInstalled(pkg, userId)) {
+                        throw IOException("Virtual installation failed: $result")
                     }
                 }
 
@@ -100,99 +134,15 @@ object GameLauncher {
 
                 activity.runOnUiThread {
                     if (dialog.isShowing) dialog.dismiss()
-                    Toast.makeText(
-                        activity, "OBB copy finished. Launch started.",
-                        Toast.LENGTH_LONG
-                    ).show()
+                    Toast.makeText(activity, "Launch started", Toast.LENGTH_LONG).show()
                 }
             } catch (e: Exception) {
                 Log.e("AbdiLoader", "OBB copy / virtual launch failed", e)
                 activity.runOnUiThread {
                     if (dialog.isShowing) dialog.dismiss()
-                    Toast.makeText(
-                        activity,
-                        "Loader error: ${e.message}",
-                        Toast.LENGTH_LONG
-                    ).show()
+                    Toast.makeText(activity, "Loader error: ${e.message}", Toast.LENGTH_LONG).show()
                 }
             }
         }.start()
-    }
-
-    private fun copyObb(
-        source: File,
-        destination: File,
-        update: (Int) -> Unit
-    ) {
-        val files = if (source.exists()) {
-            source.walkTopDown().filter { it.isFile }.toList()
-        } else {
-            emptyList()
-        }
-
-        val alreadyCopied = destination.exists() &&
-            destination.walkTopDown().any { it.isFile }
-
-        if (files.isEmpty()) {
-            if (alreadyCopied) {
-                update(100)
-                return
-            }
-            throw IOException(
-                "PUBG OBB folder not found: ${source.absolutePath}. " +
-                "Open PUBG normally and ensure its game files are downloaded."
-            )
-        }
-
-        val total = files.sumOf { it.length() }
-        if (total <= 0L) throw IOException("PUBG OBB folder is empty")
-
-        if (!destination.exists() && !destination.mkdirs()) {
-            throw IOException("Cannot create virtual OBB folder")
-        }
-
-        var copied = 0L
-        var lastPercent = -1
-
-        fun report() {
-            val percent = ((copied * 100L) / total).toInt().coerceIn(0, 100)
-            if (percent != lastPercent) {
-                lastPercent = percent
-                update(percent)
-            }
-        }
-
-        for (file in files) {
-            val relative = file.absolutePath
-                .removePrefix(source.absolutePath)
-                .trimStart(File.separatorChar)
-            val output = File(destination, relative)
-
-            if (output.exists() &&
-                output.length() == file.length() &&
-                output.lastModified() >= file.lastModified()) {
-                copied += file.length()
-                report()
-                continue
-            }
-
-            output.parentFile?.mkdirs()
-
-            FileInputStream(file).use { input ->
-                FileOutputStream(output).use { out ->
-                    val buffer = ByteArray(1024 * 1024)
-                    while (true) {
-                        val n = input.read(buffer)
-                        if (n < 0) break
-                        out.write(buffer, 0, n)
-                        copied += n
-                        report()
-                    }
-                }
-            }
-            output.setLastModified(file.lastModified())
-        }
-
-        update(100)
     }
 }
