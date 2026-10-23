@@ -143,6 +143,7 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        ShizukuEngine.init()
         window.statusBarColor = Color.BLACK
         window.navigationBarColor = Color.BLACK
         device = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID) ?: "unknown-device"
@@ -616,12 +617,155 @@ class MainActivity : Activity() {
             setPadding(0, dp(10), 0, dp(18))
             setOnClickListener { DebugLog.show(this@MainActivity) }
         })
-        val sv = ScrollView(this).apply {
+
+        // === BOTTOM TAB BAR ===
+        val tabBar = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            background = bg(Color.parseColor("#101010"), 0, Color.parseColor("#2C2C2E"))
+            setPadding(0, dp(12), 0, dp(12))
+            gravity = Gravity.CENTER
+        }
+        val homeTab = TextView(this).apply {
+            text = "Home"
+            textSize = 15f
+            setTextColor(Color.WHITE)
+            gravity = Gravity.CENTER
+            setPadding(0, dp(8), 0, dp(8))
+            setOnClickListener { showDashboard(r) }
+        }
+        val settingsTab = TextView(this).apply {
+            text = "Settings"
+            textSize = 15f
+            setTextColor(MUTED)
+            gravity = Gravity.CENTER
+            setPadding(0, dp(8), 0, dp(8))
+            setOnClickListener { showSettings() }
+        }
+        tabBar.addView(homeTab, LinearLayout.LayoutParams(0, WRAP, 1f))
+        tabBar.addView(settingsTab, LinearLayout.LayoutParams(0, WRAP, 1f))
+        
+        // Main wrapper: ScrollView on top, TabBar on bottom
+        val mainWrapper = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
             setBackgroundColor(Color.BLACK)
+        }
+        val scrollView = ScrollView(this).apply {
             isFillViewport = true
             addView(col)
         }
-        show(sv)
+        mainWrapper.addView(scrollView, LinearLayout.LayoutParams(MATCH, 0, 1f))
+        mainWrapper.addView(tabBar, LinearLayout.LayoutParams(MATCH, WRAP))
+        
+        show(mainWrapper)
+    }
+
+
+    
+    private fun showSettings() {
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(Color.BLACK)
+        }
+        val sv = ScrollView(this).apply {
+            isFillViewport = true
+            setPadding(dp(22), dp(48), dp(22), dp(24))
+        }
+        val col = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+        }
+        sv.addView(col)
+
+        col.addView(TextView(this).apply {
+            text = "Settings"
+            textSize = 34f
+            setTextColor(Color.WHITE)
+            typeface = Typeface.DEFAULT_BOLD
+            setPadding(0, 0, 0, dp(24))
+        })
+
+        fun addSection(title: String) {
+            col.addView(TextView(this).apply {
+                text = title
+                textSize = 12f
+                letterSpacing = 0.12f
+                setTextColor(MUTED)
+                setPadding(dp(16), dp(16), 0, dp(8))
+            })
+        }
+
+        fun addRow(title: String, value: String? = null, isSwitch: Boolean = false) {
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                background = bg(CARD, 12)
+                setPadding(dp(16), dp(14), dp(16), dp(14))
+            }
+            row.addView(TextView(this).apply {
+                text = title
+                textSize = 16f
+                setTextColor(Color.WHITE)
+            }, LinearLayout.LayoutParams(0, WRAP, 1f))
+            
+            if (isSwitch) {
+                row.addView(android.widget.Switch(this).apply {
+                    isChecked = true
+                    setOnCheckedChangeListener { _, _ -> }
+                })
+            } else if (value != null) {
+                row.addView(TextView(this).apply {
+                    text = value
+                    textSize = 16f
+                    setTextColor(MUTED)
+                })
+            }
+            col.addView(row, lp(MATCH, WRAP, bottom = 1))
+        }
+
+        addSection("ACCOUNT")
+        addRow("Profile", "user@abdi.loader")
+        addRow("License Key", "Active")
+
+        addSection("APPEARANCE")
+        addRow("Dark Mode", isSwitch = true)
+
+        addSection("LANGUAGE")
+        addRow("Language", "English")
+
+        addSection("NOTIFICATIONS")
+        addRow("Push Notifications", isSwitch = true)
+
+        addSection("ABOUT")
+        addRow("Version", "1.0.0")
+        addRow("Developer", "direyeah3-web")
+
+        // Bottom Tab Bar for Settings
+        val tabBar = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            background = bg(Color.parseColor("#101010"), 0, Color.parseColor("#2C2C2E"))
+            setPadding(0, dp(12), 0, dp(12))
+            gravity = Gravity.CENTER
+        }
+        val homeTab = TextView(this).apply {
+            text = "Home"
+            textSize = 15f
+            setTextColor(MUTED)
+            gravity = Gravity.CENTER
+            setPadding(0, dp(8), 0, dp(8))
+            setOnClickListener { verify(curKey) }
+        }
+        val settingsTab = TextView(this).apply {
+            text = "Settings"
+            textSize = 15f
+            setTextColor(Color.WHITE)
+            gravity = Gravity.CENTER
+            setPadding(0, dp(8), 0, dp(8))
+        }
+        tabBar.addView(homeTab, LinearLayout.LayoutParams(0, WRAP, 1f))
+        tabBar.addView(settingsTab, LinearLayout.LayoutParams(0, WRAP, 1f))
+
+        root.addView(sv, LinearLayout.LayoutParams(MATCH, 0, 1f))
+        root.addView(tabBar, LinearLayout.LayoutParams(MATCH, WRAP))
+        show(root)
     }
 
     private fun errText(e: String) = when (e) {

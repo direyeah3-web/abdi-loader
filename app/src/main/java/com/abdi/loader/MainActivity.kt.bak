@@ -18,8 +18,6 @@ import android.view.ViewGroup
 import android.view.ViewOutlineProvider
 import android.view.animation.LinearInterpolator
 import android.widget.*
-import androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult
-import androidx.activity.result.contract.ActivityResultContracts
 import android.widget.Switch
 import org.json.JSONObject
 import java.net.HttpURLConnection
