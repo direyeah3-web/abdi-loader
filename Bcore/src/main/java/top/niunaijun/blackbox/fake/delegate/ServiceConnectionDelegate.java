@@ -60,4 +60,19 @@ public class ServiceConnectionDelegate extends IServiceConnection.Stub {
             mConn.connected(name, service);
         }
     }
+
+    public void connected(ComponentName name, IBinder service, android.app.IBinderSession session, boolean dead) throws RemoteException {
+        try {
+            for (java.lang.reflect.Method m : mConn.getClass().getMethods()) {
+                if (m.getName().equals("connected") && m.getParameterTypes().length == 4) {
+                    m.setAccessible(true);
+                    m.invoke(mConn, mComponentName != null ? mComponentName : name, service, session, dead);
+                    return;
+                }
+            }
+        } catch (Throwable e) {
+            e.printStackTrace();
+        }
+        connected(name, service, dead);
+    }
 }
