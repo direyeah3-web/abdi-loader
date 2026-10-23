@@ -1,71 +1,57 @@
 package com.abdi.loader
 
 import android.app.Activity
-import android.app.Dialog
-import android.graphics.Color
-import android.graphics.drawable.ColorDrawable
-import android.graphics.drawable.GradientDrawable
-import android.os.Handler
-import android.os.Looper
-import android.view.Gravity
-import android.widget.LinearLayout
-import android.widget.ProgressBar
-import android.widget.TextView
 import android.widget.Toast
-import kotlin.concurrent.thread
+import top.niunaijun.blackbox.BlackBoxCore
 
 object GameLauncher {
-
-    // validate() waa inuu soo celiyaa null haddii license-ku sax yahay,
-    // ama fariin error ah haddii kale (lagu wacayaa thread gadaal ah)
     fun launch(activity: Activity, pkg: String, validate: () -> String? = { null }) {
-        val intent = activity.packageManager.getLaunchIntentForPackage(pkg)
-        if (intent == null) {
-            Toast.makeText(activity, "Game not installed", Toast.LENGTH_SHORT).show()
+        val error = validate()
+        if (error != null) {
+            Toast.makeText(activity, error, Toast.LENGTH_LONG).show()
             return
         }
 
-        val dp = activity.resources.displayMetrics.density
-        val tv = TextView(activity).apply {
-            text = "Checking license..."
-            setTextColor(Color.WHITE)
-            textSize = 16f
-            gravity = Gravity.CENTER
-        }
-        val box = LinearLayout(activity).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER
-            val p = (28 * dp).toInt()
-            setPadding(p, p, p, p)
-            background = GradientDrawable().apply {
-                setColor(Color.parseColor("#1C1C1E"))
-                cornerRadius = 24 * dp
-            }
-            addView(ProgressBar(activity))
-            addView(tv)
-        }
-        val dialog = Dialog(activity).apply {
-            setCancelable(false)
-            window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
-            setContentView(box)
-            show()
-        }
+        Toast.makeText(activity, "Preparing virtual game...", Toast.LENGTH_SHORT).show()
 
-        val ui = Handler(Looper.getMainLooper())
-        thread {
-            val err = try { validate() } catch (e: Exception) { "Connection error" }
-            activity.runOnUiThread {
-                if (err != null) {
-                    tv.text = err
-                    ui.postDelayed({ dialog.dismiss() }, 1800)
-                } else {
-                    tv.text = "Starting game..."
-                    ui.postDelayed({
-                        dialog.dismiss()
-                        activity.startActivity(intent)
-                    }, 1000)
+        Thread {
+            try {
+                val core = BlackBoxCore.get()
+                val userId = 0
+
+                if (!core.isInstalled(pkg, userId)) {
+                    val result = core.installPackageAsUser(pkg, userId)
+                    if (!core.isInstalled(pkg, userId)) {
+                        activity.runOnUiThread {
+                            Toast.makeText(
+                                activity,
+                                "Virtual install failed: $result",
+                                Toast.LENGTH_LONG
+                            ).show()
+                        }
+                        return@Thread
+                    }
+                }
+
+                val launched = core.launchApk(pkg, userId)
+                activity.runOnUiThread {
+                    if (!launched) {
+                        Toast.makeText(
+                            activity,
+                            "Virtual launch failed. Check engine setup.",
+                            Toast.LENGTH_LONG
+                        ).show()
+                    }
+                }
+            } catch (e: Exception) {
+                activity.runOnUiThread {
+                    Toast.makeText(
+                        activity,
+                        "Virtual engine error: ${e.message}",
+                        Toast.LENGTH_LONG
+                    ).show()
                 }
             }
-        }
+        }.start()
     }
 }

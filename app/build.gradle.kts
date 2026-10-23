@@ -2,9 +2,12 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
 }
+
 android {
     namespace = "com.abdi.loader"
-    compileSdk = 34
+    compileSdk = 36
+    ndkVersion = "27.0.12077973"
+
     defaultConfig {
         applicationId = "com.abdi.loader"
         minSdk = 24
@@ -12,9 +15,17 @@ android {
         versionCode = 1
         versionName = "1.0"
     }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    kotlinOptions { jvmTarget = "17" }
+
+    kotlinOptions {
+        jvmTarget = "17"
+    }
+}
+
+dependencies {
+    implementation(project(":Bcore"))
 }
