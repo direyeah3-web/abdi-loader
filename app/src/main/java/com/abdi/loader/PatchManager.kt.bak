@@ -7,7 +7,6 @@ import java.io.File
 import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
-import java.util.zip.ZipFile
 import rikka.shizuku.Shizuku
 
 object PatchManager {
@@ -20,8 +19,8 @@ object PatchManager {
                 val conn = URL(GITHUB_API).openConnection() as HttpURLConnection
                 conn.setRequestProperty("Accept", "application/vnd.github.v3+json")
                 conn.setRequestProperty("User-Agent", "AbdiLoader")
-                conn.connectTimeout = 15000
-                conn.readTimeout = 15000
+                conn.connectTimeout = 30000 // 30s
+                conn.readTimeout = 30000
                 
                 if (conn.responseCode != 200) {
                     onStatus("Failed to fetch release (HTTP ${conn.responseCode})")
@@ -56,7 +55,8 @@ object PatchManager {
                 }
 
                 onStatus("Downloading $fileName...")
-                val patchDir = File(android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS), "abdi_patch")
+                // Soo deji gudaha filesDir si ADB u akhrin karo
+                val patchDir = File(context.filesDir, "patch_cache")
                 if (!patchDir.exists()) patchDir.mkdirs()
                 val outFile = File(patchDir, fileName)
 
@@ -66,18 +66,18 @@ object PatchManager {
                     }
                 }
 
-                onStatus("Extracting via Shizuku...")
+                onStatus("Copying to ABDI folder via Shizuku...")
                 val abdiDir = "/storage/emulated/0/Android/data/com.tencent.ig/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/Paks/ABDI"
-                val zipPath = outFile.absolutePath
+                val localZipPath = outFile.absolutePath
 
                 if (!ShizukuEngine.checkStatus()) {
                     onStatus("Error: Shizuku permission not granted.")
                     return@Thread
                 }
 
-                // Using Shizuku to unzip directly to ABDI folder
-                // Waxay isticmaalaysaa 'unzip' command oo ADB shell ku jira
-                val process = Shizuku.newProcess(arrayOf("sh", "-c", "mkdir -p $abdiDir && unzip -o $zipPath -d $abdiDir && chmod -R 777 $abdiDir"), null, null)
+                // Isticmaal cat si loo dhaqso dhaqso u shubo zip-ka, kadib unzip
+                val cmd = "mkdir -p $abdiDir && cat $localZipPath > /data/local/tmp/abdi_patch.zip && unzip -o /data/local/tmp/abdi_patch.zip -d $abdiDir && chmod -R 777 $abdiDir && rm /data/local/tmp/abdi_patch.zip"
+                val process = Shizuku.newProcess(arrayOf("sh", "-c", cmd), null, null)
                 val exitCode = process.waitFor()
                 
                 if (exitCode == 0) {
