@@ -2,9 +2,10 @@ package com.abdi.loader
 
 import android.content.Context
 import rikka.shizuku.Shizuku
+import java.io.File
 
 object ModMenuManager {
-    private const val XML_PATH = "/storage/emulated/0/Android/data/com.tencent.ig/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/Paks/esp_prefs.xml"
+    private const val TARGET_DIR = "/storage/emulated/0/Android/data/com.tencent.ig/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/Paks/ABDI"
 
     fun toggleFeature(context: Context, feature: String, enable: Boolean, onResult: (String) -> Unit) {
         if (!ShizukuEngine.checkStatus()) {
@@ -13,17 +14,31 @@ object ModMenuManager {
         }
 
         val value = if (enable) "true" else "false"
-        // sed command to replace value
-        val cmd = "sed -i 's|<boolean name=\"$feature\" value=\"[a-z]*\"|<boolean name=\"$feature\" value=\"$value\"|g' $XML_PATH"
         
+        val paths = listOf(
+            "$TARGET_DIR/esp_prefs.xml",
+            "/storage/emulated/0/Android/data/com.tencent.ig/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/Paks/esp_prefs.xml",
+            "/storage/emulated/0/Android/data/com.tencent.ig/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/esp_prefs.xml",
+            "/storage/emulated/0/Android/data/com.tencent.ig/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/Config/Android/esp_prefs.xml"
+        )
+
         Thread {
             try {
-                val process = Shizuku.newProcess(arrayOf("sh", "-c", cmd), null, null)
+                val cmdBuilder = StringBuilder()
+                for (p in paths) {
+                    // Use sed to replace the value for the specific key
+                    cmdBuilder.append("sed -i 's|name=\\\"$feature\\\" value=\\\"[a-z]*\\\"|name=\\\"$feature\\\" value=\\\"$value\\\"|g' $p && ")
+                }
+                cmdBuilder.append("echo 'Done'")
+
+                val process = Shizuku.newProcess(arrayOf("sh", "-c", cmdBuilder.toString()), null, null)
                 val exitCode = process.waitFor()
+                
                 if (exitCode == 0) {
                     onResult("Success")
                 } else {
-                    onResult("Error code: $exitCode")
+                    val error = process.errorStream.bufferedReader().readText()
+                    onResult("Error: $error")
                 }
             } catch (e: Exception) {
                 onResult("Error: ${e.message}")

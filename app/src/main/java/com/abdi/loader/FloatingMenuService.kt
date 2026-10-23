@@ -31,15 +31,13 @@ class FloatingMenuService : Service() {
             }
             addView(title)
 
-            val features = listOf("line_esp", "radar_map", "vehicle", "warning_360", "aiming_at_me_warning")
+            val features = listOf("line_esp", "radar_map", "skeleton", "vehicle", "warning_360", "aiming_at_me_warning")
             for (feature in features) {
                 val switch = Switch(this@FloatingMenuService).apply {
                     text = feature.replace("_", " ").capitalize()
                     setTextColor(0xFFFFFFFF.toInt())
                     setOnCheckedChangeListener { _, isChecked ->
-                        ModMenuManager.toggleFeature(this@FloatingMenuService, feature, isChecked) { status ->
-                            // Toast-ka halkan lama soo bandhigi karo si fudud, laakiin wuu shaqaynayaa
-                        }
+                        ModMenuManager.toggleFeature(this@FloatingMenuService, feature, isChecked) { _ -> }
                     }
                 }
                 addView(switch)
