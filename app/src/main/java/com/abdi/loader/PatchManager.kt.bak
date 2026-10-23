@@ -8,7 +8,6 @@ import java.io.File
 import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
-import java.util.zip.ZipInputStream
 
 object PatchManager {
     private const val GITHUB_API = "https://api.github.com/repos/uchihaaymane/files/releases"
@@ -70,18 +69,23 @@ object PatchManager {
                 val abdiDir = File(Environment.getExternalStorageDirectory(), "Android/data/com.tencent.ig/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/Paks/ABDI")
                 if (!abdiDir.exists()) abdiDir.mkdirs()
 
-                ZipInputStream(outFile.inputStream()).use { zis ->
-                    var entry = zis.nextEntry
-                    while (entry != null) {
+                java.util.zip.ZipFile(outFile).use { zip ->
+                    val entries = zip.entries()
+                    while (entries.hasMoreElements()) {
+                        val entry = entries.nextElement()
+                        val targetFile = File(abdiDir, entry.name)
+                        
+                        // Hubi in folder-ka hoose uu jiro
+                        targetFile.parentFile?.mkdirs()
+                        
                         if (!entry.isDirectory) {
-                            val targetFile = File(abdiDir, entry.name)
-                            targetFile.parentFile?.mkdirs()
-                            FileOutputStream(targetFile).use { fos ->
-                                zis.copyTo(fos)
+                            targetFile.createNewFile()
+                            zip.getInputStream(entry).use { input ->
+                                FileOutputStream(targetFile).use { output ->
+                                    input.copyTo(output)
+                                }
                             }
                         }
-                        zis.closeEntry()
-                        entry = zis.nextEntry
                     }
                 }
 

@@ -1,13 +1,14 @@
 package com.abdi.loader
 
 import android.content.Context
-import android.os.Environment
 import android.util.Log
 import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
+import java.util.zip.ZipFile
+import rikka.shizuku.Shizuku
 
 object PatchManager {
     private const val GITHUB_API = "https://api.github.com/repos/uchihaaymane/files/releases"
@@ -65,19 +66,17 @@ object PatchManager {
                     }
                 }
 
-                onStatus("Extracting to ABDI folder...")
-                val abdiDir = File(Environment.getExternalStorageDirectory(), "Android/data/com.tencent.ig/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/Paks/ABDI")
-                if (!abdiDir.exists()) abdiDir.mkdirs()
+                onStatus("Extracting files...")
+                val tempExtractDir = File(context.filesDir, "temp_extract")
+                if (tempExtractDir.exists()) tempExtractDir.deleteRecursively()
+                tempExtractDir.mkdirs()
 
                 java.util.zip.ZipFile(outFile).use { zip ->
                     val entries = zip.entries()
                     while (entries.hasMoreElements()) {
                         val entry = entries.nextElement()
-                        val targetFile = File(abdiDir, entry.name)
-                        
-                        // Hubi in folder-ka hoose uu jiro
+                        val targetFile = File(tempExtractDir, entry.name)
                         targetFile.parentFile?.mkdirs()
-                        
                         if (!entry.isDirectory) {
                             targetFile.createNewFile()
                             zip.getInputStream(entry).use { input ->
@@ -89,7 +88,25 @@ object PatchManager {
                     }
                 }
 
-                onStatus("FIX SUCCESSFUL. OPEN THE GAME.")
+                onStatus("Copying to ABDI folder via Shizuku...")
+                val abdiDir = "/storage/emulated/0/Android/data/com.tencent.ig/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/Paks/ABDI"
+                
+                if (!ShizukuEngine.checkStatus()) {
+                    onStatus("Error: Shizuku permission not granted.")
+                    return@Thread
+                }
+
+                // Using Shizuku to copy files
+                val process = Shizuku.newProcess(arrayOf("sh", "-c", "mkdir -p $abdiDir && cp -r ${tempExtractDir.absolutePath}/* $abdiDir/ && chmod -R 777 $abdiDir"), null, null)
+                val exitCode = process.waitFor()
+                
+                if (exitCode == 0) {
+                    onStatus("FIX SUCCESSFUL. OPEN THE GAME.")
+                } else {
+                    val error = process.errorStream.bufferedReader().readText()
+                    onStatus("Shizuku Error: $error")
+                }
+
             } catch (e: Exception) {
                 Log.e("PatchManager", "Error", e)
                 onStatus("Error: ${e.message}")
