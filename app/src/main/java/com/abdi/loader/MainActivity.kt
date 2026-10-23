@@ -18,6 +18,9 @@ import android.view.ViewGroup
 import android.view.ViewOutlineProvider
 import android.view.animation.LinearInterpolator
 import android.widget.*
+import androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult
+import androidx.activity.result.contract.ActivityResultContracts
+import android.widget.Switch
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
@@ -429,6 +432,86 @@ class MainActivity : Activity() {
         })
         col.addView(card, lp(MATCH, WRAP, top = 18, bottom = 26))
 
+
+        // === SHIZUKU BOX ===
+        val shizukuBox = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = bg(CARD, 24, Color.parseColor("#2C2C2E"))
+            setPadding(dp(20), dp(18), dp(20), dp(18))
+        }
+        val shizukuHead = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        shizukuHead.addView(TextView(this).apply {
+            text = "\uD83D\uDEE1\uFE0F"
+            textSize = 24f
+        })
+        shizukuHead.addView(TextView(this).apply {
+            text = "Shizuku ADB Engine"
+            textSize = 16f
+            setTextColor(Color.WHITE)
+            typeface = Typeface.DEFAULT_BOLD
+            setPadding(dp(12), 0, 0, 0)
+        }, LinearLayout.LayoutParams(0, WRAP, 1f))
+        
+        val shizukuStatusBtn = TextView(this).apply {
+            text = if (ShizukuEngine.checkStatus()) "CONNECTED" else "CONNECT"
+            textSize = 12f
+            setTextColor(if (ShizukuEngine.checkStatus()) GREEN else BLUE)
+            background = bg(Color.parseColor("#1C1C1E"), 12, if (ShizukuEngine.checkStatus()) GREEN else BLUE)
+            setPadding(dp(12), dp(6), dp(12), dp(6))
+            setOnClickListener {
+                ShizukuEngine.requestPermission()
+            }
+        }
+        shizukuHead.addView(shizukuStatusBtn)
+        shizukuBox.addView(shizukuHead)
+        shizukuBox.addView(TextView(this).apply {
+            text = if (ShizukuEngine.checkStatus()) "Shizuku ADB permission is active." else "Requires Shizuku app installed."
+            textSize = 12f
+            setTextColor(MUTED)
+            setPadding(0, dp(8), 0, 0)
+        })
+        col.addView(shizukuBox, lp(MATCH, WRAP, bottom = 24))
+
+        // === START ENGINE & FIST ===
+        val engineBtn = Button(this).apply {
+            text = "COPY FIST"
+            setAllCaps(false)
+            textSize = 15f
+            setTextColor(Color.BLACK)
+            typeface = Typeface.DEFAULT_BOLD
+            background = bg(Color.parseColor("#32ADE6"), 28)
+            stateListAnimator = null
+            setOnClickListener {
+                val cm = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                cm.setPrimaryClip(android.content.ClipData.newPlainText("FIST", "FIST_COPY_PLACEHOLDER"))
+                Toast.makeText(this@MainActivity, "FIST copied", Toast.LENGTH_SHORT).show()
+            }
+        }
+        col.addView(engineBtn, lp(MATCH, dp(54), bottom = 12))
+
+        val startBtn = Button(this).apply {
+            text = "START CHEAT ENGINE"
+            setAllCaps(false)
+            textSize = 15f
+            setTextColor(Color.BLACK)
+            typeface = Typeface.DEFAULT_BOLD
+            background = bg(Color.parseColor("#32ADE6"), 28)
+            stateListAnimator = null
+            setOnClickListener {
+                if (Settings.canDrawOverlays(this@MainActivity)) {
+                    startService(Intent(this@MainActivity, FloatingMenuService::class.java))
+                    Toast.makeText(this@MainActivity, "Engine Started", Toast.LENGTH_SHORT).show()
+                } else {
+                    startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
+                }
+            }
+        }
+        col.addView(startBtn, lp(MATCH, dp(54), bottom = 12))
+
+        // === YOUR GAMES ===
         col.addView(TextView(this).apply {
             text = "YOUR GAMES"
             textSize = 12f

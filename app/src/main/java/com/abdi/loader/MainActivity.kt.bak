@@ -527,6 +527,14 @@ class MainActivity : Activity() {
             setPadding(0, dp(18), 0, dp(18))
             setOnClickListener { showLoading(); verify(curKey) }
         })
+        col.addView(TextView(this).apply {
+            text = "Log"
+            textSize = 15f
+            setTextColor(MUTED)
+            gravity = Gravity.CENTER
+            setPadding(0, dp(10), 0, dp(18))
+            setOnClickListener { DebugLog.show(this@MainActivity) }
+        })
         val sv = ScrollView(this).apply {
             setBackgroundColor(Color.BLACK)
             isFillViewport = true
