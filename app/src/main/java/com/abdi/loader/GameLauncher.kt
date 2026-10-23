@@ -121,15 +121,13 @@ object GameLauncher {
 
                 val core = BlackBoxCore.get()
                 val userId = 0
-                if (!core.isInstalled(pkg, userId)) {
-                    val result = core.installPackageAsUser(pkg, userId)
-                    if (!core.isInstalled(pkg, userId)) {
-                        throw IOException("Virtual installation failed: $result")
-                    }
+                val result = core.installPackageAsUser(pkg, userId)
+                Log.i("AbdiLoader", "install success=${result.success} pkg=${result.packageName} msg=${result.msg}")
+                if (!result.success) {
+                    throw IOException("Virtual install FAILED: ${result.msg}")
                 }
-
                 if (!core.launchApk(pkg, userId)) {
-                    throw IOException("Virtual engine could not launch $pkg")
+                    throw IOException("Virtual engine could not launch $pkg (install msg: ${result.msg})")
                 }
 
                 activity.runOnUiThread {
