@@ -114,73 +114,104 @@ class MainActivity : Activity() {
     }
 
     private fun showLogin(msg: String, prefill: String) {
+        val bgc = Color.parseColor("#050505")
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_HORIZONTAL
-            setBackgroundColor(Color.parseColor("#050505"))
-            setPadding(dp(26), dp(110), dp(26), dp(26))
+            setBackgroundColor(bgc)
+            setPadding(dp(24), dp(36), dp(24), dp(24))
         }
-        root.addView(DotsView(this), lp(dp(56), dp(56)))
+        val stage = FrameLayout(this)
+        stage.addView(OrbitView(this), FrameLayout.LayoutParams(MATCH, MATCH))
+        val glow = View(this).apply {
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                gradientType = GradientDrawable.RADIAL_GRADIENT
+                gradientRadius = dp(80).toFloat()
+                colors = intArrayOf(Color.parseColor("#550A84FF"), Color.TRANSPARENT)
+            }
+        }
+        stage.addView(glow, FrameLayout.LayoutParams(dp(170), dp(170), Gravity.CENTER))
+        val logo = ImageView(this).apply {
+            setImageResource(R.drawable.logo)
+            scaleType = ImageView.ScaleType.CENTER_CROP
+        }
+        round(logo, 26)
+        stage.addView(logo, FrameLayout.LayoutParams(dp(96), dp(96), Gravity.CENTER))
+        for (prop in arrayOf("scaleX", "scaleY")) {
+            android.animation.ObjectAnimator.ofFloat(logo, prop, 1f, 1.07f).apply {
+                duration = 1800
+                repeatCount = ValueAnimator.INFINITE
+                repeatMode = ValueAnimator.REVERSE
+                start()
+            }
+        }
+        root.addView(stage, lp(MATCH, dp(330)))
+
         root.addView(TextView(this).apply {
-            text = "Welcome back"
-            textSize = 30f
+            text = "Welcome to\nAbdi Loader"
+            textSize = 28f
             setTextColor(Color.WHITE)
-            typeface = Typeface.SERIF
+            typeface = Typeface.DEFAULT_BOLD
             gravity = Gravity.CENTER
-            setPadding(0, dp(14), 0, dp(44))
         })
         root.addView(TextView(this).apply {
-            text = "License key"
+            text = "Enter your license key to unlock your games."
             textSize = 14f
-            setTextColor(Color.WHITE)
-            setPadding(dp(4), 0, 0, dp(8))
-        }, lp(MATCH, WRAP))
+            setTextColor(MUTED)
+            gravity = Gravity.CENTER
+            setPadding(dp(8), dp(10), dp(8), dp(26))
+        })
 
-        val frame = FrameLayout(this)
-        val input = EditText(this).apply {
-            hint = "XXXX-XXXX-XXXX-XXXX"
-            setHintTextColor(Color.parseColor("#48484A"))
-            setTextColor(Color.WHITE)
-            textSize = 17f
-            typeface = Typeface.MONOSPACE
+        val pill = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            background = bg(Color.parseColor("#141414"), 28, Color.parseColor("#262626"))
-            setPadding(dp(20), dp(8), dp(78), dp(8))
+            background = bg(Color.parseColor("#101010"), 28, Color.parseColor("#2A2A2A"))
+            setPadding(dp(18), 0, dp(6), 0)
+        }
+        pill.addView(TextView(this).apply { text = "\uD83D\uDD11"; textSize = 17f })
+        val input = EditText(this).apply {
+            hint = "Enter license key"
+            setHintTextColor(Color.parseColor("#5A5A5E"))
+            setTextColor(Color.WHITE)
+            textSize = 16f
+            typeface = Typeface.MONOSPACE
+            background = null
+            setPadding(dp(12), 0, dp(8), 0)
             setSingleLine(true)
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
             setText(prefill)
         }
-        frame.addView(input, FrameLayout.LayoutParams(MATCH, dp(56)))
-        val paste = TextView(this).apply {
+        pill.addView(input, LinearLayout.LayoutParams(0, dp(54), 1f))
+        pill.addView(TextView(this).apply {
             text = "Paste"
             textSize = 14f
             setTextColor(BLUE)
-            setPadding(dp(14), dp(10), dp(18), dp(10))
+            setPadding(dp(10), dp(12), dp(14), dp(12))
             setOnClickListener {
                 val cm = this@MainActivity.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                 val t = cm.primaryClip?.getItemAt(0)?.coerceToText(this@MainActivity)?.toString()?.trim()
                 if (!t.isNullOrEmpty()) input.setText(t.uppercase())
             }
-        }
-        frame.addView(paste, FrameLayout.LayoutParams(WRAP, WRAP, Gravity.END or Gravity.CENTER_VERTICAL))
-        root.addView(frame, lp(MATCH, WRAP))
+        })
+        root.addView(pill, lp(MATCH, dp(56)))
 
         val btn = Button(this).apply {
-            text = "Sign In"
+            text = "Unlock"
             setAllCaps(false)
             textSize = 17f
             setTextColor(Color.BLACK)
             typeface = Typeface.DEFAULT_BOLD
-            background = bg(Color.WHITE, 28)
+            background = bg(Color.parseColor("#F2F2F2"), 28)
             stateListAnimator = null
         }
-        root.addView(btn, lp(MATCH, dp(56), top = 40))
+        root.addView(btn, lp(MATCH, dp(56), top = 14))
         val status = TextView(this).apply {
             text = msg
             textSize = 15f
             setTextColor(RED)
             gravity = Gravity.CENTER
-            setPadding(0, dp(18), 0, 0)
+            setPadding(0, dp(16), 0, 0)
         }
         root.addView(status)
         btn.setOnClickListener {
@@ -191,7 +222,7 @@ class MainActivity : Activity() {
             verify(key)
         }
         val sv = ScrollView(this).apply {
-            setBackgroundColor(Color.parseColor("#050505"))
+            setBackgroundColor(bgc)
             isFillViewport = true
             addView(root)
         }
@@ -431,5 +462,55 @@ class MainActivity : Activity() {
         val stream = if (c.responseCode in 200..299) c.inputStream else c.errorStream
         val text = stream.bufferedReader().use { it.readText() }
         return JSONObject(text)
+    }
+}
+
+
+class OrbitView(ctx: Context) : View(ctx) {
+    private val d = ctx.resources.displayMetrics.density
+    private val ring = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeWidth = d
+        color = Color.argb(46, 255, 255, 255)
+        pathEffect = DashPathEffect(floatArrayOf(5f * d, 9f * d), 0f)
+    }
+    private val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#151515") }
+    private val edge = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeWidth = d
+        color = Color.argb(70, 255, 255, 255)
+    }
+    private val dot = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE }
+    private var t = 0f
+    private val anim = ValueAnimator.ofFloat(0f, 1f).apply {
+        duration = 70000
+        repeatCount = ValueAnimator.INFINITE
+        interpolator = LinearInterpolator()
+        addUpdateListener { t = it.animatedValue as Float; invalidate() }
+    }
+    override fun onAttachedToWindow() { super.onAttachedToWindow(); anim.start() }
+    override fun onDetachedFromWindow() { anim.cancel(); super.onDetachedFromWindow() }
+    override fun onDraw(c: Canvas) {
+        val cx = width / 2f
+        val cy = height / 2f
+        val base = minOf(width, height) / 2f
+        val radii = floatArrayOf(0.40f, 0.64f, 0.88f)
+        val counts = intArrayOf(2, 3, 4)
+        val sizes = floatArrayOf(9f, 12f, 8f)
+        for (ri in radii.indices) {
+            val r = base * radii[ri]
+            c.drawCircle(cx, cy, r, ring)
+            val dir = if (ri % 2 == 0) 1 else -1
+            for (j in 0 until counts[ri]) {
+                val ang = Math.PI * 2 * (j.toDouble() / counts[ri] + dir * t * (4 + ri * 2))
+                val x = (cx + r * Math.cos(ang)).toFloat()
+                val y = (cy + r * Math.sin(ang)).toFloat()
+                val sr = sizes[ri] * d
+                c.drawCircle(x, y, sr, fill)
+                c.drawCircle(x, y, sr, edge)
+                dot.alpha = 110 + 100 * ((j + ri) % 2)
+                c.drawCircle(x, y, sr * 0.28f, dot)
+            }
+        }
     }
 }
