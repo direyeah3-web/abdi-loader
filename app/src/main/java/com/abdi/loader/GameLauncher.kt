@@ -140,7 +140,12 @@ object GameLauncher {
                 Log.e("AbdiLoader", "OBB copy / virtual launch failed", e)
                 activity.runOnUiThread {
                     if (dialog.isShowing) dialog.dismiss()
-                    Toast.makeText(activity, "Loader error: ${e.message}", Toast.LENGTH_LONG).show()
+                    val trace = Log.getStackTraceString(e).lines().take(18).joinToString("\n")
+                    android.app.AlertDialog.Builder(activity)
+                        .setTitle("Loader error")
+                        .setMessage(trace)
+                        .setPositiveButton("OK", null)
+                        .show()
                 }
             }
         }.start()
