@@ -1,5 +1,7 @@
 package com.abdi.loader
 
+import android.content.Intent
+
 import android.animation.ValueAnimator
 import android.app.Activity
 import android.content.ClipboardManager
