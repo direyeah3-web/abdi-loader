@@ -8,8 +8,8 @@ dependencyResolutionManagement {
 rootProject.name = "AbdiLoader"
 include(":app")
 
-include(":Bcore")
 
-include(":black-reflection")
 
-include(":compiler")
+
+
+
