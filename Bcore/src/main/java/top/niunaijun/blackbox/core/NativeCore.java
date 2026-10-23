@@ -21,60 +21,6 @@ import top.niunaijun.blackbox.utils.Slog;
 public class NativeCore {
     public static final String TAG = "NativeCore";
 
-    /** Real system UID of the currently-running virtual app, cached before PM hooks fire. */
-    private static volatile int sCachedRealUid = -1;
-    private static volatile String sCachedRealUidPkg = null;
-    // Re-entrancy guard for getCallingUid — prevents StackOverflowError on API 37
-    // where PropertyInvalidatedCache calls Binder.getCallingUid() inside cache queries.
-    private static final ThreadLocal<Boolean> sReentrantGuard = new ThreadLocal<>();
-
-    /**
-     * Called from BlackBoxLoader.beforeCreateApplication() BEFORE any PM proxy hooks fire.
-     * At that point BlackBoxCore.getPackageManager() still returns the raw system PM.
-     */
-    public static void cacheRealUid(String packageName) {
-        // Strategy 1: parse /data/system/packages.list via su — bypasses all Java PM hooks
-        try {
-            java.lang.Process suProcess = Runtime.getRuntime().exec(
-                    new String[]{"su", "-c",
-                            "grep '^" + packageName + " ' /data/system/packages.list"});
-            java.io.BufferedReader reader = new java.io.BufferedReader(
-                    new java.io.InputStreamReader(suProcess.getInputStream()));
-            String line = reader.readLine();
-            reader.close();
-            suProcess.waitFor();
-            if (line != null && !line.isEmpty()) {
-                String[] parts = line.trim().split("\\s+");
-                if (parts.length >= 2) {
-                    int uid = Integer.parseInt(parts[1]);
-                    if (uid >= Process.FIRST_APPLICATION_UID
-                            && uid <= Process.LAST_APPLICATION_UID) {
-                        sCachedRealUid = uid;
-                        sCachedRealUidPkg = packageName;
-                        Log.d(TAG, "cacheRealUid: " + packageName + "=" + uid + " (su)");
-                        return;
-                    }
-                }
-            }
-        } catch (Exception e) {
-            Log.w(TAG, "cacheRealUid su failed for " + packageName + ": " + e.getMessage());
-        }
-        // Strategy 2: raw PM fallback (may be hooked inside virtual process)
-        try {
-            android.content.pm.PackageManager pm = BlackBoxCore.getPackageManager();
-            int uid = pm.getApplicationInfo(packageName, 0).uid;
-            if (uid >= Process.FIRST_APPLICATION_UID && uid <= Process.LAST_APPLICATION_UID) {
-                sCachedRealUid = uid;
-                sCachedRealUidPkg = packageName;
-                Log.d(TAG, "cacheRealUid: " + packageName + "=" + uid + " (PM)");
-            } else {
-                Log.w(TAG, "cacheRealUid: PM uid=" + uid + " out of range for " + packageName);
-            }
-        } catch (Exception e) {
-            Log.w(TAG, "cacheRealUid PM failed for " + packageName + ": " + e.getMessage());
-        }
-    }
-
     static {
 
         System.loadLibrary("blackbox");
@@ -89,25 +35,12 @@ public class NativeCore {
     public static native void hideXposed();
 
     public static native boolean disableHiddenApi();
-
+    
     public static native boolean disableResourceLoading();
-
-    // ART Offset Verifier tools — see tools/art-offset-verifier/
-    public static native long getArtMethodPtr(java.lang.reflect.Method method);
-    public static native int readNativeInt(long address);
 
 
     @Keep
     public static int getCallingUid(int origCallingUid) {
-        // Fix 6 (API 37): Android 17 changed PropertyInvalidatedCache to call
-        // Binder.getCallingUid() from inside cache queries. Since we hook
-        // getCallingUid() and call back into getPackageInfo() (which uses the
-        // cache), this creates an infinite recursion → StackOverflowError.
-        // Guard with a ThreadLocal re-entrancy flag to break the cycle.
-        if (Boolean.TRUE.equals(sReentrantGuard.get())) {
-            return origCallingUid;
-        }
-        sReentrantGuard.set(true);
         try {
             
             if (origCallingUid > 0 && origCallingUid < Process.FIRST_APPLICATION_UID)
@@ -117,38 +50,57 @@ public class NativeCore {
                 return origCallingUid;
 
             if (origCallingUid == BlackBoxCore.getHostUid()) {
-                // Return the real system UID of the virtual app so Telecom/JobScheduler accept it
+                
                 String appPackageName = BlackBoxCore.getAppPackageName();
-                if (appPackageName != null) {
-                    // GMS and WebView need their own process UID
-                    if (appPackageName.equals("com.google.android.gms") ||
-                        appPackageName.equals("com.google.android.webview")) {
-                        return Process.myUid();
-                    }
-                    // All other virtual apps: return real system UID.
-                    // Use the cached real UID set before PM proxy hooks fire.
-                    if (sCachedRealUid > 0 && sCachedRealUidPkg != null
-                            && sCachedRealUidPkg.equals(appPackageName)) {
-                        Log.d(TAG, "getCallingUid: cached uid=" + sCachedRealUid
-                                + " spoofing " + origCallingUid + " for " + appPackageName);
-                        return sCachedRealUid;
-                    }
-                    // Fallback: callingBUid
-                    try {
-                        int callingBUid = BlackBoxCore.getCallingBUid();
-                        if (callingBUid > 0 && callingBUid < Process.LAST_APPLICATION_UID) {
-                            return callingBUid;
-                        }
-                    } catch (Exception ignored) {}
+                if (appPackageName != null && appPackageName.equals("com.google.android.gms")){
+                    
                 }
+                
+                
+                
+                if (appPackageName != null && appPackageName.equals("com.google.android.webview")){
+                    return Process.myUid();
+                }
+                
+                
+                try {
+                    int callingBUid = BlackBoxCore.getCallingBUid();
+                    if (callingBUid > 0 && callingBUid < Process.LAST_APPLICATION_UID) {
+                        return callingBUid;
+                    }
+                } catch (Exception e) {
+                    Log.w(TAG, "Error getting calling BUid: " + e.getMessage());
+                }
+                
+                
+                try {
+                    StackTraceElement[] stackTrace = Thread.currentThread().getStackTrace();
+                    for (StackTraceElement element : stackTrace) {
+                        String className = element.getClassName();
+                        String methodName = element.getMethodName();
+                        
+                        
+                        if ((className.contains("Settings") || className.contains("FeatureFlag")) &&
+                            (methodName.contains("getString") || methodName.contains("getInt") || 
+                             methodName.contains("getLong") || methodName.contains("getFloat"))) {
+                            
+                            Log.d(TAG, "System settings access detected, using system UID to prevent mismatch");
+                            
+                            return Process.SYSTEM_UID; 
+                        }
+                    }
+                } catch (Exception e) {
+                    Log.w(TAG, "Error analyzing stack trace for UID resolution: " + e.getMessage());
+                }
+                
+                
                 return BlackBoxCore.getHostUid();
             }
             return origCallingUid;
         } catch (Exception e) {
             Log.e(TAG, "Error in getCallingUid: " + e.getMessage());
+            
             return Process.myUid();
-        } finally {
-            sReentrantGuard.set(false);
         }
     }
 

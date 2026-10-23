@@ -128,65 +128,14 @@ public class IPackageManagerProxy extends BinderInvocationStub {
 
     @ProxyMethod("getPackageInfo")
     public static class GetPackageInfo extends MethodHook {
-        // Fix 6 (API 37): PropertyInvalidatedCache.query() now calls Binder.getCallingUid()
-        // internally, and our getCallingUid hook calls getPackageInfo(), creating infinite
-        // recursion. This guard detects re-entry and falls through to the real IPackageManager
-        // (method.invoke) instead of re-entering our hook logic.
-        private static final ThreadLocal<Boolean> sInHook = new ThreadLocal<>();
-
         @Override
         protected Object hook(Object who, Method method, Object[] args) throws Throwable {
-            // Re-entrancy guard: if already inside this hook on this thread, call real PM directly
-            if (Boolean.TRUE.equals(sInHook.get())) {
-                return method.invoke(who, args);
-            }
-            sInHook.set(true);
-            try {
             String packageName = (String) args[0];
             int flags = MethodParameterUtils.toInt(args[1]);
             
             
-            // For GMS and Play Store: return REAL system package info so signature check passes
-            if ("com.google.android.gms".equals(packageName)
-                    || "com.android.vending".equals(packageName)
-                    || "com.google.android.gsf".equals(packageName)) {
-                try {
-                    PackageInfo real = BlackBoxCore.getContext().getPackageManager()
-                            .getPackageInfo(packageName, flags);
-                    if (real != null) return real;
-                } catch (Exception ignored) {}
-                // Fallback fake if GMS not on system
+            if ("com.android.vending".equals(packageName)) {
                 return createFakeGooglePlayServicesPackageInfo();
-            }
-
-            // Phase 2A: Signature/cert passthrough for virtual app self-queries.
-            // Problem: libwhatsapp.so calls getPackageName() → gets "top.niunaijun.blackbox"
-            // (the host process), then calls getPackageInfo(host, GET_SIGNING_CERTIFICATES)
-            // → receives BlackBox's debug cert → produces a bad registration token → parole block.
-            // Fix: intercept any signature-flag query and route it to the real system PM.
-            // If the queried package is the BlackBox host but caller is a virtual app,
-            // substitute the virtual app's actual package so Meta's cert is returned.
-            final int GET_SIGNING_CERTIFICATES = 0x8000000;
-            boolean wantsSignature = (flags & PackageManager.GET_SIGNATURES) != 0
-                    || (flags & GET_SIGNING_CERTIFICATES) != 0;
-            if (wantsSignature) {
-                String realPkg = packageName;
-                if (BlackBoxCore.getHostPkg().equals(packageName)) {
-                    String virtualPkg = BActivityThread.getAppPackageName();
-                    if (virtualPkg != null && !BlackBoxCore.getHostPkg().equals(virtualPkg)) {
-                        realPkg = virtualPkg;
-                        Slog.d(TAG, "Phase 2A: Redirecting signature query "
-                                + packageName + " → " + realPkg);
-                    }
-                }
-                try {
-                    PackageInfo realInfo = BlackBoxCore.getContext()
-                            .getPackageManager().getPackageInfo(realPkg, flags);
-                    if (realInfo != null) {
-                        Slog.d(TAG, "Phase 2A: Returning real system cert for " + realPkg);
-                        return realInfo;
-                    }
-                } catch (Exception ignored) {}
             }
             
             PackageInfo packageInfo = BlackBoxCore.getBPackageManager().getPackageInfo(packageName, flags, BlackBoxCore.getUserId());
@@ -209,11 +158,8 @@ public class IPackageManagerProxy extends BinderInvocationStub {
                 return method.invoke(who, args);
             }
             return null;
-            } finally {
-                sInHook.set(false);
-            }
         }
-
+        
         private PackageInfo createFakeGooglePlayServicesPackageInfo() {
             PackageInfo packageInfo = new PackageInfo();
             packageInfo.packageName = "com.android.vending";
@@ -311,16 +257,6 @@ public class IPackageManagerProxy extends BinderInvocationStub {
 
         @Override
         protected Object hook(Object who, Method method, Object[] args) throws Throwable {
-            // Fix 9: Android 17 (API 37) changed some IPackageManager list-returning
-            // methods away from ParceledListSlice (e.g. AppInfoList for this call).
-            // method.getReturnType() reflects the real, running OS's actual AIDL
-            // signature, so use that instead of hardcoding an SDK_INT check — if it
-            // no longer matches ParceledListSlice, let the real PM's Binder proxy
-            // marshal whatever type this OS now expects instead of wrapping our
-            // virtualized list in the (now wrong) type and hitting a ClassCastException.
-            if (!ParceledListSliceCompat.isReturnParceledListSlice(method)) {
-                return method.invoke(who, args);
-            }
             int flags = MethodParameterUtils.toInt(args[0]);
             List<ApplicationInfo> installedApplications = BlackBoxCore.getBPackageManager().getInstalledApplications(flags, BlackBoxCore.getUserId());
             return ParceledListSliceCompat.create(installedApplications);
@@ -332,18 +268,6 @@ public class IPackageManagerProxy extends BinderInvocationStub {
 
         @Override
         protected Object hook(Object who, Method method, Object[] args) throws Throwable {
-            // Fix 9: Android 17 (API 37) changed IPackageManager.getInstalledPackages()
-            // to return PackageInfoList instead of ParceledListSlice. Wrapping our
-            // virtualized list in the old type threw:
-            //   ClassCastException: Couldn't convert result of type
-            //   android.content.pm.ParceledListSlice to android.content.pm.PackageInfoList
-            // on every Play Store launch. method.getReturnType() reflects the real,
-            // running OS's actual AIDL signature, so check that instead of hardcoding
-            // an SDK_INT branch — if it no longer matches ParceledListSlice, let the
-            // real PM's Binder proxy marshal whatever type this OS now expects.
-            if (!ParceledListSliceCompat.isReturnParceledListSlice(method)) {
-                return method.invoke(who, args);
-            }
             int flags = MethodParameterUtils.toInt(args[0]);
             List<PackageInfo> installedPackages = BlackBoxCore.getBPackageManager().getInstalledPackages(flags, BlackBoxCore.getUserId());
             return ParceledListSliceCompat.create(installedPackages);
@@ -375,13 +299,6 @@ public class IPackageManagerProxy extends BinderInvocationStub {
     public static class QueryContentProviders extends MethodHook {
         @Override
         protected Object hook(Object who, Method method, Object[] args) throws Throwable {
-            // Fix 9 (preventive, same pattern as getInstalledPackages — not confirmed
-            // to have crashed on device, but this method returns ParceledListSlice
-            // through the same reflection path, so it's exposed to the same API 37
-            // return-type migration risk).
-            if (!ParceledListSliceCompat.isReturnParceledListSlice(method)) {
-                return method.invoke(who, args);
-            }
             int flags = MethodParameterUtils.toInt(args[2]);
             List<ProviderInfo> providers = BlackBoxCore.getBPackageManager().
                     queryContentProviders(BlackBoxCore.getAppProcessName(), BlackBoxCore.getBUid(), flags, BlackBoxCore.getUserId());
@@ -399,17 +316,12 @@ public class IPackageManagerProxy extends BinderInvocationStub {
             List<ResolveInfo> resolves = BlackBoxCore.getBPackageManager().queryBroadcastReceivers(intent, flags, type, BActivityThread.getUserId());
             Slog.d(TAG, "queryIntentReceivers: " + resolves);
 
+            
             if (BuildCompat.isN()) {
-                // Fix 9 (preventive, same pattern as getInstalledPackages): only wrap
-                // in ParceledListSlice if that's still what this OS's real
-                // queryIntentReceivers() actually returns.
-                if (!ParceledListSliceCompat.isReturnParceledListSlice(method)) {
-                    return method.invoke(who, args);
-                }
                 return ParceledListSliceCompat.create(resolves);
             }
 
-
+            
             return resolves;
         }
     }
@@ -465,11 +377,7 @@ public class IPackageManagerProxy extends BinderInvocationStub {
     public static class GetSharedLibraries extends MethodHook {
         @Override
         protected Object hook(Object who, Method method, Object[] args) throws Throwable {
-            // Fix 9 (preventive, same pattern as getInstalledPackages — not confirmed
-            // to have crashed on device).
-            if (!ParceledListSliceCompat.isReturnParceledListSlice(method)) {
-                return method.invoke(who, args);
-            }
+            
             return ParceledListSliceCompat.create(new ArrayList<>());
         }
     }

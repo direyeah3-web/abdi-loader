@@ -727,10 +727,6 @@ public class BPackageManagerService extends IBPackageManagerService.Stub impleme
     }
 
     private PackageParser.Package parserApk(String file) {
-        // Android 14+ (API 33+): PackageParser is removed. Use PackageParserFix.
-        if (top.niunaijun.blackbox.utils.compat.PackageParserFix.needsFix()) {
-            return parserApkCompat(file);
-        }
         try {
             PackageParser parser = PackageParserCompat.createParser(new File(file));
             PackageParser.Package aPackage = PackageParserCompat.parsePackage(parser, new File(file), 0);
@@ -740,55 +736,6 @@ public class BPackageManagerService extends IBPackageManagerService.Stub impleme
             t.printStackTrace();
         }
         return null;
-    }
-
-    /**
-     * API 33+ replacement using pure reflection — avoids all PackageParser
-     * inner classes (Activity, Service, etc.) which are also removed in API 34+.
-     */
-    private PackageParser.Package parserApkCompat(String file) {
-        try {
-            android.content.pm.PackageInfo pi =
-                top.niunaijun.blackbox.utils.compat.PackageParserFix.parseApk(
-                    BlackBoxCore.getContext(), file);
-            if (pi == null) return null;
-
-            // Instantiate PackageParser.Package via reflection (still exists as stub in API 33/34)
-            Class<?> pkgClass = Class.forName("android.content.pm.PackageParser$Package");
-            java.lang.reflect.Constructor<?> ctor = pkgClass.getDeclaredConstructor(String.class);
-            ctor.setAccessible(true);
-            PackageParser.Package pkg = (PackageParser.Package) ctor.newInstance(pi.packageName);
-
-            // applicationInfo
-            pkg.applicationInfo = pi.applicationInfo;
-
-            // mSignatures — set via reflection (field may be private)
-            android.content.pm.Signature[] sigs =
-                top.niunaijun.blackbox.utils.compat.PackageParserFix.getSignatures(pi);
-            try {
-                java.lang.reflect.Field sigField = pkgClass.getDeclaredField("mSignatures");
-                sigField.setAccessible(true);
-                sigField.set(pkg, sigs);
-            } catch (Exception e) {
-                Slog.w(TAG, "mSignatures field not found: " + e.getMessage());
-            }
-
-            // requestedPermissions
-            if (pi.requestedPermissions != null) {
-                for (String perm : pi.requestedPermissions) {
-                    pkg.requestedPermissions.add(perm);
-                }
-            }
-
-            // Components via BPackageManagerService helper using PackageInfo directly
-            // We inject them via the BPackage path which accepts PackageInfo on API 33+
-            Slog.d(TAG, "parserApkCompat OK: " + pi.packageName + " sigs=" + sigs.length);
-            return pkg;
-        } catch (Throwable t) {
-            Slog.e(TAG, "parserApkCompat failed: " + t.getMessage());
-            t.printStackTrace();
-            return null;
-        }
     }
 
     static String fixProcessName(String defProcessName, String processName) {

@@ -344,32 +344,6 @@ public class IActivityManagerProxy extends ClassInvocationStub {
             String resolvedType = (String) args[3];
             IServiceConnection connection = (IServiceConnection) args[4];
 
-            // Phase 2 / Fix 10: For Play Integrity service binds, wrap the IServiceConnection
-            // so ServiceConnectionDelegate.connected() intercepts when the service connects.
-            // The wrapped connected() will proxy the IBinder to bridge nonces → WaEnhancer.
-            if (intent != null) {
-                ComponentName comp = intent.getComponent();
-                String action  = intent.getAction();
-                boolean isIntegrity =
-                    (comp != null && (
-                        "com.google.android.finsky.expressintegrityservice.ExpressIntegrityService"
-                            .equals(comp.getClassName()) ||
-                        comp.getClassName().contains("IntegrityService") ||
-                        comp.getClassName().contains("expressintegrity"))) ||
-                    (action != null && (
-                        action.contains("expressintegrityservice") ||
-                        action.contains("IntegrityService")));
-                if (isIntegrity && connection != null) {
-                    Slog.d(TAG, "Phase 2: Wrapping integrity service connection for bridge");
-                    IServiceConnection proxy =
-                        top.niunaijun.blackbox.hooks.IntegrityProxy.createConnectionProxy(
-                            connection, intent);
-                    args[4] = proxy;
-                    args[callingPackageIndex] = BlackBoxCore.getHostPkg();
-                    return method.invoke(who, args);
-                }
-            }
-
             
             if (intent == null) {
                 Slog.w(TAG, "BindServiceCommon: Intent is null, proceeding with original call");

@@ -265,38 +265,18 @@ void JniHook::InitJniHook(JNIEnv *env, int api_level) {
     if (api_level >= __ANDROID_API_S__) {
         flags = flags | kAccNterpInvokeFastPathFlag;
     }
-    // Android 15 (API 35): kAccMustCountLocks added — not set on native methods
-    // Android 16 (API 36): kAccReservedRefFields added — not set on native methods
-    // These flags are NOT included in the pattern because our calibration method
-    // (nativeOffset/nativeOffset2) doesn't use monitor-enter, so ART won't set them.
 
     char *start = reinterpret_cast<char *>(artMethod);
-    bool found = false;
     for (i = 1; i < HookEnv.art_method_size; ++i) {
         auto value = *(uint32_t *) (start + i * sizeof(uint32_t));
+
         if (value == flags) {
             HookEnv.art_method_flags_offset = i * sizeof(uint32_t);
-            found = true;
             break;
         }
     }
-    // Fallback for API 35/36: mask out upper bits that may vary
-    if (!found) {
-        ALOGE("art_method_flags_offset: exact match failed, trying masked search (API %d)", api_level);
-        uint32_t mask = 0x0000FFFF | kAccPublicApi;  // stable bits
-        uint32_t maskedFlags = flags & mask;
-        for (i = 1; i < HookEnv.art_method_size; ++i) {
-            auto value = *(uint32_t *) (start + i * sizeof(uint32_t));
-            if ((value & mask) == maskedFlags) {
-                HookEnv.art_method_flags_offset = i * sizeof(uint32_t);
-                found = true;
-                ALOGD("art_method_flags_offset found via masked search at offset %d", i);
-                break;
-            }
-        }
-    }
-    if (!found) {
-        ALOGE("init jni hook error. art_method_flags_offset not found! API=%d", api_level);
+    if(i == HookEnv.art_method_size){
+        ALOGE("init jni hook error. art_method_flags_offset not found!");
         return;
     }
 
