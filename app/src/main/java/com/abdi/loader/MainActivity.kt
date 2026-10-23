@@ -411,9 +411,7 @@ class MainActivity : Activity() {
                 background = bg(if (launch != null) BLUE else Color.parseColor("#2C2C2E"), 22)
                 isEnabled = launch != null
                 setOnClickListener {
-                    try { startActivity(launch) } catch (e: Exception) {
-                        Toast.makeText(this@MainActivity, "Could not open", Toast.LENGTH_SHORT).show()
-                    }
+                    GameLauncher.launch(this@MainActivity, pkg)
                 }
             }
             row.addView(go, LinearLayout.LayoutParams(dp(80), dp(42)))
