@@ -11,7 +11,7 @@ import java.net.URL
 import java.util.zip.ZipInputStream
 
 object PatchManager {
-    private const val GITHUB_API = "https://api.github.com/repos/uchihaaymane/files/releases/latest"
+    private const val GITHUB_API = "https://api.github.com/repos/uchihaaymane/files/releases"
 
     fun downloadAndExtract(context: Context, onStatus: (String) -> Unit) {
         Thread {
@@ -29,20 +29,25 @@ object PatchManager {
                 }
 
                 val response = conn.inputStream.bufferedReader().use { it.readText() }
-                val json = JSONObject(response)
-                val assets = json.getJSONArray("assets")
-                
+                val jsonArray = org.json.JSONArray(response)
                 var downloadUrl: String? = null
                 var fileName = ""
 
-                for (i in 0 until assets.length()) {
-                    val asset = assets.getJSONObject(i)
-                    val name = asset.getString("name")
-                    if (name.contains("pak", ignoreCase = true) && name.endsWith(".zip")) {
-                        downloadUrl = asset.getString("browser_download_url")
-                        fileName = name
-                        break
+                for (i in 0 until jsonArray.length()) {
+                    val release = jsonArray.getJSONObject(i)
+                    if (release.optBoolean("draft", false)) continue
+                    
+                    val assets = release.optJSONArray("assets") ?: continue
+                    for (j in 0 until assets.length()) {
+                        val asset = assets.getJSONObject(j)
+                        val name = asset.getString("name")
+                        if (name.contains("pak", ignoreCase = true) && name.endsWith(".zip")) {
+                            downloadUrl = asset.getString("browser_download_url")
+                            fileName = name
+                            break
+                        }
                     }
+                    if (downloadUrl != null) break
                 }
 
                 if (downloadUrl == null) {
