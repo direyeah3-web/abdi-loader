@@ -56,7 +56,7 @@ object PatchManager {
                 }
 
                 onStatus("Downloading $fileName...")
-                val patchDir = File(context.filesDir, "patch_cache")
+                val patchDir = File(android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS), "abdi_patch")
                 if (!patchDir.exists()) patchDir.mkdirs()
                 val outFile = File(patchDir, fileName)
 
@@ -66,38 +66,18 @@ object PatchManager {
                     }
                 }
 
-                onStatus("Extracting files...")
-                val tempExtractDir = File(context.filesDir, "temp_extract")
-                if (tempExtractDir.exists()) tempExtractDir.deleteRecursively()
-                tempExtractDir.mkdirs()
-
-                java.util.zip.ZipFile(outFile).use { zip ->
-                    val entries = zip.entries()
-                    while (entries.hasMoreElements()) {
-                        val entry = entries.nextElement()
-                        val targetFile = File(tempExtractDir, entry.name)
-                        targetFile.parentFile?.mkdirs()
-                        if (!entry.isDirectory) {
-                            targetFile.createNewFile()
-                            zip.getInputStream(entry).use { input ->
-                                FileOutputStream(targetFile).use { output ->
-                                    input.copyTo(output)
-                                }
-                            }
-                        }
-                    }
-                }
-
-                onStatus("Copying to ABDI folder via Shizuku...")
+                onStatus("Extracting via Shizuku...")
                 val abdiDir = "/storage/emulated/0/Android/data/com.tencent.ig/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/Paks/ABDI"
-                
+                val zipPath = outFile.absolutePath
+
                 if (!ShizukuEngine.checkStatus()) {
                     onStatus("Error: Shizuku permission not granted.")
                     return@Thread
                 }
 
-                // Using Shizuku to copy files
-                val process = Shizuku.newProcess(arrayOf("sh", "-c", "mkdir -p $abdiDir && cp -r ${tempExtractDir.absolutePath}/* $abdiDir/ && chmod -R 777 $abdiDir"), null, null)
+                // Using Shizuku to unzip directly to ABDI folder
+                // Waxay isticmaalaysaa 'unzip' command oo ADB shell ku jira
+                val process = Shizuku.newProcess(arrayOf("sh", "-c", "mkdir -p $abdiDir && unzip -o $zipPath -d $abdiDir && chmod -R 777 $abdiDir"), null, null)
                 val exitCode = process.waitFor()
                 
                 if (exitCode == 0) {
