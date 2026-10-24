@@ -11,7 +11,6 @@ import rikka.shizuku.Shizuku
 
 object PatchManager {
     private const val GITHUB_API = "https://api.github.com/repos/uchihaaymane/files/releases"
-    private const val TARGET_DIR = "/storage/emulated/0/Android/data/com.tencent.ig/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/Paks/ABDI"
 
     fun downloadAndExtract(context: Context, onStatus: (String) -> Unit) {
         Thread {
@@ -24,7 +23,7 @@ object PatchManager {
                 conn.readTimeout = 30000
                 
                 if (conn.responseCode != 200) {
-                    onStatus("Failed to fetch release")
+                    onStatus("Failed to fetch release (HTTP ${conn.responseCode})")
                     return@Thread
                 }
 
@@ -36,6 +35,7 @@ object PatchManager {
                 for (i in 0 until jsonArray.length()) {
                     val release = jsonArray.getJSONObject(i)
                     if (release.optBoolean("draft", false)) continue
+                    
                     val assets = release.optJSONArray("assets") ?: continue
                     for (j in 0 until assets.length()) {
                         val asset = assets.getJSONObject(j)
@@ -64,37 +64,21 @@ object PatchManager {
                     }
                 }
 
-                onStatus("Writing esp_prefs.xml...")
-                val prefsFile = File(context.filesDir, "esp_prefs.xml")
-                FileOutputStream(prefsFile).use { it.write(getDefaultPrefs().toByteArray()) }
+                onStatus("Copying to ABDI folder via Shizuku...")
+                val abdiDir = "/storage/emulated/0/Android/data/com.tencent.ig/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/Paks/ABDI"
 
-                onStatus("Installing patch via Shizuku...")
                 if (!ShizukuEngine.checkStatus()) {
                     onStatus("Error: Shizuku permission not granted.")
                     return@Thread
                 }
 
-                val paths = listOf(
-                    "$TARGET_DIR/esp_prefs.xml",
-                    "/storage/emulated/0/Android/data/com.tencent.ig/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/Paks/esp_prefs.xml",
-                    "/storage/emulated/0/Android/data/com.tencent.ig/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/esp_prefs.xml",
-                    "/storage/emulated/0/Android/data/com.tencent.ig/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/Config/Android/esp_prefs.xml"
-                )
-
-                val cmd = StringBuilder()
-                cmd.append("mkdir -p $TARGET_DIR && ")
-                cmd.append("cp ${localFile.absolutePath} /data/local/tmp/abdi_patch.zip && ")
-                cmd.append("unzip -o /data/local/tmp/abdi_patch.zip -d $TARGET_DIR && ")
+                val cmd = "mkdir -p $abdiDir && cp ${localFile.absolutePath} /data/local/tmp/abdi_patch.zip && unzip -o /data/local/tmp/abdi_patch.zip -d $abdiDir && chmod -R 777 $abdiDir && rm /data/local/tmp/abdi_patch.zip"
                 
-                for (p in paths) {
-                    cmd.append("mkdir -p $(dirname $p) && cp ${prefsFile.absolutePath} $p && chmod 777 $p && ")
-                }
-                cmd.append("chmod -R 777 $TARGET_DIR && rm /data/local/tmp/abdi_patch.zip")
-
-                val process = Shizuku.newProcess(arrayOf("sh", "-c", cmd.toString()), null, null)
+                val process = Shizuku.newProcess(arrayOf("sh", "-c", cmd), null, null)
                 val exitCode = process.waitFor()
                 
                 if (exitCode == 0) {
+                    localFile.delete()
                     onStatus("FIX SUCCESSFUL. OPEN THE GAME.")
                 } else {
                     val error = process.errorStream.bufferedReader().readText()
@@ -106,23 +90,5 @@ object PatchManager {
                 onStatus("Error: ${e.message}")
             }
         }.start()
-    }
-
-    private fun getDefaultPrefs(): String {
-        return """<?xml version='1.0' encoding='utf-8' standalone='yes' ?>
-<map>
-    <boolean name="line_esp" value="true" />
-    <boolean name="radar_map" value="false" />
-    <boolean name="skeleton" value="true" />
-    <boolean name="warning_360" value="true" />
-    <boolean name="aiming_at_me_warning" value="true" />
-    <boolean name="vehicle" value="true" />
-    <boolean name="name" value="true" />
-    <boolean name="distance" value="true" />
-    <boolean name="health" value="true" />
-    <boolean name="weapons" value="true" />
-    <boolean name="team_number" value="true" />
-    <boolean name="esp_defaults_applied" value="true" />
-</map>"""
     }
 }
