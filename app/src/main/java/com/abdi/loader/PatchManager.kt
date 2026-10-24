@@ -58,6 +58,10 @@ object PatchManager {
                 val downloadDir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS)
                 val localFile = File(downloadDir, "abdi_patch.zip")
                 
+                // Abuur lexus_config.json
+                val configFile = File(downloadDir, "lexus_config.json")
+                FileOutputStream(configFile).use { it.write("{\"esp\":true, \"aimbot\":false}".toByteArray()) }
+                
                 URL(downloadUrl).openStream().use { input ->
                     FileOutputStream(localFile).use { output ->
                         input.copyTo(output)
@@ -65,14 +69,14 @@ object PatchManager {
                 }
 
                 onStatus("Copying to ABDI folder via Shizuku...")
-                val abdiDir = "/storage/emulated/0/Android/data/com.tencent.ig/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/Paks/ABDI"
+                val abdiDir = "/storage/emulated/0/Android/data/com.tencent.ig/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/Paks/WOLF"
 
                 if (!ShizukuEngine.checkStatus()) {
                     onStatus("Error: Shizuku permission not granted.")
                     return@Thread
                 }
 
-                val cmd = "mkdir -p $abdiDir && cp ${localFile.absolutePath} /data/local/tmp/abdi_patch.zip && unzip -o /data/local/tmp/abdi_patch.zip -d $abdiDir && chmod -R 777 $abdiDir && rm /data/local/tmp/abdi_patch.zip"
+                val cmd = "mkdir -p $abdiDir && cp ${localFile.absolutePath} /data/local/tmp/abdi_patch.zip && unzip -o /data/local/tmp/abdi_patch.zip -d $abdiDir && cp ${configFile.absolutePath} $abdiDir/lexus_config.json && chmod -R 777 $abdiDir && rm /data/local/tmp/abdi_patch.zip"
                 
                 val process = Shizuku.newProcess(arrayOf("sh", "-c", cmd), null, null)
                 val exitCode = process.waitFor()
