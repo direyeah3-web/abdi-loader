@@ -35,6 +35,7 @@ object PatchManager {
                 for (i in 0 until jsonArray.length()) {
                     val release = jsonArray.getJSONObject(i)
                     if (release.optBoolean("draft", false)) continue
+                    
                     val assets = release.optJSONArray("assets") ?: continue
                     for (j in 0 until assets.length()) {
                         val asset = assets.getJSONObject(j)
@@ -54,7 +55,7 @@ object PatchManager {
                 }
 
                 onStatus("Downloading $fileName...")
-                val downloadDir = context.cacheDir
+                val downloadDir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS)
                 val localFile = File(downloadDir, "abdi_patch.zip")
                 
                 URL(downloadUrl).openStream().use { input ->
@@ -63,28 +64,21 @@ object PatchManager {
                     }
                 }
 
+                onStatus("Copying to ABDI folder via Shizuku...")
+                val abdiDir = "/storage/emulated/0/Android/data/com.tencent.ig/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/Paks/ABDI"
+
                 if (!ShizukuEngine.checkStatus()) {
                     onStatus("Error: Shizuku permission not granted.")
                     return@Thread
                 }
 
-                // Xogta JSON oo loo beddelay Base64 si looga fogaado quote issues
-                val jsonStr = "{\"esp\":true, \"aimbot\":false}"
-                val base64Json = android.util.Base64.encodeToString(jsonStr.toByteArray(), android.util.Base64.NO_WRAP)
-
-                val wolfDir = "/storage/emulated/0/Android/data/com.tencent.ig/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/Paks/WOLF"
-                val cmd = "mkdir -p $wolfDir && " +
-                          "cp ${localFile.absolutePath} /data/local/tmp/abdi_patch.zip && " +
-                          "unzip -o /data/local/tmp/abdi_patch.zip -d $wolfDir && " +
-                          "echo '$base64Json' | base64 -d > /data/local/tmp/lexus_config.json && " +
-                          "cp /data/local/tmp/lexus_config.json $wolfDir/lexus_config.json && " +
-                          "chmod -R 777 $wolfDir && " +
-                          "rm /data/local/tmp/abdi_patch.zip /data/local/tmp/lexus_config.json"
-
+                val cmd = "mkdir -p $abdiDir && cp ${localFile.absolutePath} /data/local/tmp/abdi_patch.zip && unzip -o /data/local/tmp/abdi_patch.zip -d $abdiDir && chmod -R 777 $abdiDir && rm /data/local/tmp/abdi_patch.zip"
+                
                 val process = Shizuku.newProcess(arrayOf("sh", "-c", cmd), null, null)
                 val exitCode = process.waitFor()
                 
                 if (exitCode == 0) {
+                    localFile.delete()
                     onStatus("FIX SUCCESSFUL. OPEN THE GAME.")
                 } else {
                     val error = process.errorStream.bufferedReader().readText()
